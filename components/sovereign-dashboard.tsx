@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { UserButton } from "@clerk/nextjs";
 import Image from "next/image";
 import { loadSovereignValue, saveSovereignValue, clearSovereignStore } from "@/lib/client/sovereign-store";
 import { DEMO_STATE } from "@/lib/demo-data";
