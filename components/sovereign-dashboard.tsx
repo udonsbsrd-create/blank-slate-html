@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { UserButton } from "@clerk/nextjs";
 import Image from "next/image";
 import { loadSovereignValue, saveSovereignValue, clearSovereignStore } from "@/lib/client/sovereign-store";
 import { DEMO_STATE } from "@/lib/demo-data";
@@ -1732,16 +1731,8 @@ Now analyze all ${competitorList.length} competitors:`,
             </button>
           )}
 
-          <div className="ml-2 flex items-center justify-center">
-            <UserButton 
-              userProfileProps={{
-                appearance: {
-                  elements: {
-                    profileSection__activeDevices: { display: "none" }
-                  }
-                }
-              }}
-            />
+          <div className="ml-2 flex h-8 w-8 items-center justify-center rounded-full bg-th-accent text-xs font-bold text-th-text-inverse">
+            U
           </div>
         </header>
 
