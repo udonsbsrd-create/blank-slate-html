@@ -1,0 +1,101 @@
+ARCHDRIFT: PLATFORM DEMO SCRIPT
+====================================
+
+PREPARATION BEFORE THE CALL
+1. Make sure your screen is clean, no distracting tabs.
+2. Have the Archdrift dashboard open and logged into the target Workspace (e.g., Beeing Social).
+3. (Optional) Run a quick batch analysis beforehand so there is fresh data populated in the Analytics and Responses tabs to show.
+
+---
+
+[1] INTRODUCTION: THE "WHY"
+"Hi [Client Name], thank you for jumping on. 
+Before we dive into the tool, let me quickly explain why we built Archdrift and what exactly the point of it is. 
+
+Right now, when your potential customers are looking for services, they aren't just Googling anymore—they are asking ChatGPT, Perplexity, Gemini, Copilot, Google AI, and Grok. 
+
+If your brand isn't being recommended by those AI models, you are losing leads to competitors who are. But checking every AI model manually, for every keyword, every single day is impossible. 
+
+That is exactly what Archdrift does. It is an intelligence dashboard that monitors how your brand appears across all major AI models simultaneously. It tracks your 'AI Visibility' over time, shows you exactly what the AI is saying about you, and gives us the data we need to optimize your brand so you show up as the #1 recommended choice."
+
+
+---
+
+[2] PROJECT SETTINGS
+"Let's start from the beginning. Here in Project Settings, we configure your brand's core identity. We input your name, aliases, website URLs, industry, target keywords, and a short description. We do this because the system injects this context into every AI prompt behind the scenes, ensuring the analysis is highly relevant to your specific business."
+
+
+---
+
+[3] PROMPT HUB
+"Next is the Prompt Hub. Think of this as our tracking library. We add the exact questions your customers are asking AI—for example: 'Best digital marketing agencies in Mumbai'. We use a dynamic tag {brand} so the system automatically tests your brand against those queries. We can run these manually, or batch-run them across all 6 major AI platforms simultaneously."
+
+
+---
+
+[4] PERSONA FAN-OUT
+"If we want to get really granular, we use the Persona Fan-Out tab. We can take a single query and ask the AI to answer it from the perspective of different personas—like a CMO versus a Founder—to see how AI tailors its recommendations based on who is asking. This helps us identify which buyer personas your brand resonates with most."
+
+
+---
+
+[5] NICHE EXPLORER
+"But what if we don't know exactly what your customers are searching for? That's where the Niche Explorer comes in. We simply type in your niche or product category, and the system uses AI to generate high-intent search queries that real buyers would type into AI assistants. We can then add these directly to the Prompt Hub for ongoing tracking."
+
+
+---
+
+[6] RESPONSES 
+"Once we run those prompts, all the data flows into the Responses tab. Here, we can see exactly what each AI model generated. More importantly, Archdrift automatically scores every response from 0 to 100 based on how prominently your brand was mentioned, the sentiment (positive/neutral/negative), and if they cited your website."
+
+
+---
+
+[7] VISIBILITY ANALYTICS
+"If we jump over to Visibility Analytics, this is where we measure success. We get a trendline showing your average AI Visibility Score over time. If ChatGPT suddenly stops recommending you, we will see that dip immediately on this chart and we can take action."
+
+
+---
+
+[8] CITATIONS 
+"So, how do we improve those scores? We look at the Citations tab. This shows us exactly which websites the AI models are citing when they give answers in your industry. If we see a specific blog or directory being cited constantly, but you aren't listed on it—that's a 'Citation Opportunity'."
+
+
+---
+
+[9] CITATION OPPORTUNITIES
+"In fact, we have a dedicated Citation Opportunities tab just for this. It filters the data to exclusively show the domains that were cited by AI when your brand was NOT mentioned. These are our highest-priority outreach targets to get you listed."
+
+
+---
+
+[10] COMPETITOR BATTLECARDS
+"We also have Competitor Battlecards. We drop in your top competitors, and the AI generates a breakdown of how it perceives them versus you—their strengths, weaknesses, and pricing—so we know exactly how to position your brand to beat them in AI responses."
+
+
+---
+
+[11] AEO AUDIT 
+"Next, we use the AEO Audit to optimize your actual website. Answer Engine Optimization (AEO) is the new SEO. We drop your URL in here, and the system audits your site to ensure it has things like an 'llms.txt' file and proper schema markup, making it perfectly readable by AI web crawlers."
+
+
+---
+
+[12] SRO ANALYSIS
+"The SRO Analysis goes even deeper. Search Result Optimization (SRO) runs a 6-stage deep analysis pipeline. It checks if Google's Gemini is properly grounding its answers using your site, scrapes cross-platform citations, and gives us a prioritized, actionable checklist of exactly what to fix on your website to increase your AI selection rate."
+
+
+---
+
+[13] AUTOMATION
+"Finally, the Automation tab. We don't want to run all of this manually every day. We can set up deployment-ready scheduling templates to track your brand visibility completely automatically. The system will run in the background and monitor for any significant drift in your AI presence."
+
+
+---
+
+[14] DOCUMENTATION & CONCLUSION
+"And of course, we have a full Documentation tab built in for reference. 
+
+Ultimately, Archdrift takes the guesswork out of the AI revolution. It tells us exactly where you stand, what your competitors are doing, and gives us a precise roadmap to ensure you are the top recommended brand across all AI platforms. 
+
+Do you have any specific keywords or competitors you'd like us to test right now?"
