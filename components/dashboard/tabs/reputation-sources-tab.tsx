@@ -1,9 +1,12 @@
-import { useMemo, useState } from "react";
-import type { ScrapeRun } from "@/components/dashboard/types";
-import { ALL_PROVIDERS, PROVIDER_LABELS, type Provider } from "@/components/dashboard/types";
-import type { RunDelta } from "@/components/dashboard/types";
+"use client";
 
-type ReputationSourcesTabProps = {
+import { useMemo, useState } from "react";
+import type { ScrapeRun, RunDelta } from "@/components/dashboard/types";
+import { ALL_PROVIDERS, PROVIDER_LABELS, type Provider } from "@/components/dashboard/types";
+
+/* ───────────────────────── types ────────────────────────────── */
+
+type Props = {
   runs: ScrapeRun[];
   brandTerms: string[];
   competitorTerms: string[];
@@ -11,10 +14,25 @@ type ReputationSourcesTabProps = {
   onDeleteRun?: (index: number) => void;
 };
 
-function normalizeAnswerForDisplay(answer: string): string {
-  let text = answer;
+const PROVIDER_TINT: Record<Provider, string> = {
+  chatgpt: "#10a37f",
+  perplexity: "#1ba1e3",
+  copilot: "#7c5bbf",
+  gemini: "#4285f4",
+  google_ai: "#ea4335",
+};
 
-  // If the answer looks like raw JSON, try to extract the text content
+const SENTIMENT_TINT: Record<string, string> = {
+  positive: "var(--th-success)",
+  neutral: "var(--th-text-accent)",
+  negative: "var(--th-danger)",
+  "not-mentioned": "var(--th-text-muted)",
+};
+
+/* ───────────────────────── utilities ────────────────────────── */
+
+function normalize(answer: string): string {
+  let text = answer;
   if (/^\s*[{\[]/.test(text)) {
     try {
       const parsed = JSON.parse(text);
@@ -23,27 +41,22 @@ function normalizeAnswerForDisplay(answer: string): string {
         if (Array.isArray(obj)) return obj.map(extract).filter(Boolean).join("\n\n");
         if (obj && typeof obj === "object") {
           const rec = obj as Record<string, unknown>;
-          for (const key of ["answer", "response", "output", "text", "content", "message", "body"]) {
-            if (typeof rec[key] === "string" && (rec[key] as string).trim()) return (rec[key] as string).trim();
+          for (const k of ["answer", "response", "output", "text", "content", "message", "body"]) {
+            if (typeof rec[k] === "string" && (rec[k] as string).trim()) return (rec[k] as string).trim();
           }
           return Object.values(rec).map(extract).filter(Boolean).join("\n\n");
         }
         return String(obj ?? "");
       };
-      const extracted = extract(parsed);
-      if (extracted.trim().length > 20) text = extracted;
+      const out = extract(parsed);
+      if (out.trim().length > 20) text = out;
     } catch {
-      // Strip JSON structural characters as fallback
-      text = text
-        .replace(/[{}\[\]"]/g, " ")
-        .replace(/\\n/g, "\n")
-        .replace(/\\t/g, " ");
+      text = text.replace(/[{}\[\]"]/g, " ").replace(/\\n/g, "\n").replace(/\\t/g, " ");
     }
   }
-
   return text
     .replace(/\r\n?/g, "\n")
-    .replace(/```[\s\S]*?```/g, (block) => block.replace(/```/g, ""))
+    .replace(/```[\s\S]*?```/g, (b) => b.replace(/```/g, ""))
     .replace(/<br\s*\/?\s*>/gi, "\n")
     .replace(/<[^>]+>/g, "")
     .replace(/&amp;/g, "&")
@@ -52,252 +65,66 @@ function normalizeAnswerForDisplay(answer: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, " ")
-    .replace(/\\n/g, "\n")
-    .replace(/\\t/g, " ")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
-/** Highlight brand and competitor mentions in text */
-function HighlightedText({
+function Highlight({
   text,
-  brandTerms,
-  competitorTerms,
+  brand,
+  competitor,
 }: {
   text: string;
-  brandTerms: string[];
-  competitorTerms: string[];
+  brand: string[];
+  competitor: string[];
 }) {
-  if (brandTerms.length === 0 && competitorTerms.length === 0) {
-    return <span>{text}</span>;
-  }
-
-  const allTerms = [
-    ...brandTerms.map((t) => ({ term: t, type: "brand" as const })),
-    ...competitorTerms.map((t) => ({ term: t, type: "competitor" as const })),
+  if (brand.length === 0 && competitor.length === 0) return <>{text}</>;
+  const all = [
+    ...brand.map((t) => ({ term: t, type: "brand" as const })),
+    ...competitor.map((t) => ({ term: t, type: "competitor" as const })),
   ].sort((a, b) => b.term.length - a.term.length);
-
-  const escaped = allTerms.map((t) => ({
+  const escaped = all.map((t) => ({
     ...t,
-    pattern: t.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+    p: t.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
   }));
-
-  const regex = new RegExp(
-    `(${escaped.map((t) => t.pattern).join("|")})`,
-    "gi",
-  );
-
-  const parts = text.split(regex);
-
+  const re = new RegExp(`(${escaped.map((e) => e.p).join("|")})`, "gi");
+  const parts = text.split(re);
   return (
-    <span>
+    <>
       {parts.map((part, i) => {
-        const match = allTerms.find(
-          (t) => t.term.toLowerCase() === part.toLowerCase(),
+        const hit = all.find((t) => t.term.toLowerCase() === part.toLowerCase());
+        if (!hit) return <span key={i}>{part}</span>;
+        return (
+          <mark
+            key={i}
+            className={
+              hit.type === "brand"
+                ? "rounded-sm bg-th-brand-bg px-0.5 font-semibold text-th-brand-text"
+                : "rounded-sm bg-th-competitor-bg px-0.5 font-semibold text-th-competitor-text"
+            }
+          >
+            {part}
+          </mark>
         );
-        if (match) {
-          return (
-            <mark
-              key={i}
-              className={
-                match.type === "brand"
-                  ? "rounded-sm bg-th-brand-bg px-0.5 font-medium text-th-brand-text"
-                  : "rounded-sm bg-th-competitor-bg px-0.5 font-medium text-th-competitor-text"
-              }
-              title={match.type === "brand" ? "Your brand" : "Competitor"}
-            >
-              {part}
-            </mark>
-          );
-        }
-        return <span key={i}>{part}</span>;
       })}
-    </span>
+    </>
   );
 }
 
-function SentimentBadge({ sentiment }: { sentiment: string }) {
-  const colors: Record<string, string> = {
-    positive: "bg-th-success-soft text-th-success border-th-success/30",
-    neutral: "bg-th-accent-soft text-th-text-accent border-th-accent/30",
-    negative: "bg-th-danger-soft text-th-danger border-th-danger/30",
-    "not-mentioned": "bg-th-card-alt text-th-text-muted border-th-border",
-  };
-  return (
-    <span
-      className={`inline-block rounded-full border px-2 py-0.5 text-xs font-medium uppercase ${colors[sentiment] ?? colors["neutral"]}`}
-    >
-      {sentiment}
-    </span>
-  );
+function relTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-const PROVIDER_COLORS: Record<Provider, string> = {
-  chatgpt: "#10a37f",
-  perplexity: "#1ba1e3",
-  copilot: "#7c5bbf",
-  gemini: "#4285f4",
-  google_ai: "#ea4335",
-};
-
-function ProviderBadge({ provider }: { provider: Provider }) {
-  const bg = PROVIDER_COLORS[provider] ?? "#4285f4";
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold"
-      style={{ backgroundColor: bg + "22", color: bg, border: `1px solid ${bg}44` }}
-    >
-      {PROVIDER_LABELS[provider] ?? provider}
-    </span>
-  );
-}
-
-function ModelResponseCard({
-  run,
-  brandTerms,
-  competitorTerms,
-  delta,
-  onDelete,
-}: {
-  run: ScrapeRun;
-  brandTerms: string[];
-  competitorTerms: string[];
-  delta?: number | null;
-  onDelete?: () => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const rawDisplay = normalizeAnswerForDisplay(run.answer ?? "");
-  // Filter out garbage: answers that just echo the prompt or are just a URL
-  const isGarbage =
-    !rawDisplay ||
-    rawDisplay.toLowerCase().trim() === run.prompt.toLowerCase().trim() ||
-    /^https?:\/\/\S+$/i.test(rawDisplay.trim());
-  const display = isGarbage ? "" : rawDisplay;
-  const preview = display.length > 300 ? display.slice(0, 300) + "…" : display;
-  const uniqueSources = [...new Set(run.sources)];
-
-  return (
-    <div className="group relative rounded-lg border border-th-border bg-th-card">
-      {/* Header */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-th-card-hover"
-      >
-        <ProviderBadge provider={run.provider} />
-        <div className="flex flex-1 items-center gap-3">
-          <span className="text-xs text-th-text-muted">
-            Score: <span className="font-semibold text-th-text">{run.visibilityScore}</span>/100
-          </span>
-          {delta != null && delta !== 0 && (
-            <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-bold ${
-              delta > 0 ? "bg-th-success-soft text-th-success" : "bg-th-danger-soft text-th-danger"
-            }`}>
-              {delta > 0 ? "↑" : "↓"}{Math.abs(delta)}
-            </span>
-          )}
-          <SentimentBadge sentiment={run.sentiment ?? "neutral"} />
-          {run.brandMentions?.length > 0 && (
-            <span className="text-xs text-th-brand-text">
-              {run.brandMentions.length} brand mention{run.brandMentions.length > 1 ? "s" : ""}
-            </span>
-          )}
-          {uniqueSources.length > 0 && (
-            <span className="text-xs text-th-text-muted">
-              {uniqueSources.length} source{uniqueSources.length > 1 ? "s" : ""}
-            </span>
-          )}
-        </div>
-        <span className="text-xs text-th-text-muted">{run.createdAt.slice(0, 10)}</span>
-        <span className="text-xs text-th-text-muted">{expanded ? "▲" : "▼"}</span>
-      </button>
-      {onDelete && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            if (window.confirm("Delete this response? This cannot be undone.")) onDelete();
-          }}
-          className="absolute right-2 top-2 rounded p-1 text-th-text-muted opacity-0 transition-opacity hover:bg-th-danger-soft hover:text-th-danger group-hover:opacity-100"
-          title="Delete this response"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-        </button>
-      )}
-
-      {/* Preview when collapsed */}
-      {!expanded && (
-        <div className="border-t border-th-border/40 px-4 py-2.5 text-sm leading-relaxed text-th-text-secondary">
-          {preview ? (
-            <HighlightedText
-              text={preview}
-              brandTerms={brandTerms}
-              competitorTerms={competitorTerms}
-            />
-          ) : (
-            <span className="italic text-th-text-muted">No response text captured — try re-running this prompt.</span>
-          )}
-        </div>
-      )}
-
-      {/* Full content when expanded */}
-      {expanded && (
-        <div className="space-y-3 border-t border-th-border px-4 py-3">
-          {/* Highlight legend */}
-          {(brandTerms.length > 0 || competitorTerms.length > 0) && (
-            <div className="flex items-center gap-3 text-xs text-th-text-muted">
-              {brandTerms.length > 0 && (
-                <span className="flex items-center gap-1">
-                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-th-brand-bg" />
-                  Brand
-                </span>
-              )}
-              {competitorTerms.length > 0 && (
-                <span className="flex items-center gap-1">
-                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-th-competitor-bg" />
-                  Competitor
-                </span>
-              )}
-            </div>
-          )}
-
-          <div className="max-h-[400px] overflow-auto whitespace-pre-wrap break-words pr-1 text-sm leading-7 text-th-text">
-            {display ? (
-              <HighlightedText
-                text={display}
-                brandTerms={brandTerms}
-                competitorTerms={competitorTerms}
-              />
-            ) : (
-              <span className="italic text-th-text-muted">No response text captured from this AI model. Re-run the prompt to fetch fresh data.</span>
-            )}
-          </div>
-
-          {uniqueSources.length > 0 && (
-            <div>
-              <div className="mb-1.5 text-xs font-medium uppercase tracking-wider text-th-text-muted">
-                Cited Sources
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {uniqueSources.map((source) => (
-                  <a
-                    key={source}
-                    href={source}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-block max-w-[300px] truncate rounded-md border border-th-border bg-th-card-alt px-2 py-1 text-xs text-th-text-accent hover:text-th-accent"
-                    title={source}
-                  >
-                    {source}
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+/* ───────────────────────── main ─────────────────────────────── */
 
 export function ReputationSourcesTab({
   runs,
@@ -305,300 +132,430 @@ export function ReputationSourcesTab({
   competitorTerms,
   runDeltas = [],
   onDeleteRun,
-}: ReputationSourcesTabProps) {
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+}: Props) {
+  const [query, setQuery] = useState("");
   const [filterProvider, setFilterProvider] = useState<Provider | "all">("all");
   const [filterSentiment, setFilterSentiment] = useState<string>("all");
-  const [sortField, setSortField] = useState<"date" | "score">("date");
+  const [sort, setSort] = useState<"date" | "score">("date");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  // Apply filters
-  const filteredRuns = useMemo(() => {
-    let list = [...runs];
-    if (filterProvider !== "all") list = list.filter((r) => r.provider === filterProvider);
-    if (filterSentiment !== "all") list = list.filter((r) => r.sentiment === filterSentiment);
-    return list;
-  }, [runs, filterProvider, filterSentiment]);
-
-  // Group runs by prompt
-  const promptGroups = useMemo(() => {
-    const m = new Map<string, ScrapeRun[]>();
-    filteredRuns.forEach((run) => {
-      const key = run.prompt;
-      const group = m.get(key) ?? [];
-      group.push(run);
-      m.set(key, group);
-    });
-    const groups = [...m.entries()]
-      .map(([prompt, groupRuns]) => ({
-        prompt,
-        runs: groupRuns.sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-        ),
-      }));
-
-    if (sortField === "score") {
-      return groups.sort((a, b) => {
-        const aAvg = a.runs.reduce((s, r) => s + (r.visibilityScore ?? 0), 0) / a.runs.length;
-        const bAvg = b.runs.reduce((s, r) => s + (r.visibilityScore ?? 0), 0) / b.runs.length;
-        return bAvg - aAvg;
-      });
-    }
-
-    return groups.sort((a, b) => {
-      const aLatest = new Date(a.runs[0].createdAt).getTime();
-      const bLatest = new Date(b.runs[0].createdAt).getTime();
-      return bLatest - aLatest;
-    });
-  }, [filteredRuns, sortField]);
-
-  // Insight stats
-  const insights = useMemo(() => {
-    if (runs.length === 0) return null;
-    const avgScore = Math.round(runs.reduce((a, r) => a + (r.visibilityScore ?? 0), 0) / runs.length);
-    const sentiments = { positive: 0, neutral: 0, negative: 0, "not-mentioned": 0 };
-    const providerCounts: Partial<Record<Provider, number>> = {};
-    const providerScores: Partial<Record<Provider, number[]>> = {};
-    let brandMentioned = 0;
-    let totalSources = 0;
-
-    runs.forEach((r) => {
-      sentiments[r.sentiment as keyof typeof sentiments] = (sentiments[r.sentiment as keyof typeof sentiments] ?? 0) + 1;
-      providerCounts[r.provider] = (providerCounts[r.provider] ?? 0) + 1;
-      if (!providerScores[r.provider]) providerScores[r.provider] = [];
-      providerScores[r.provider]!.push(r.visibilityScore ?? 0);
-      if ((r.brandMentions?.length ?? 0) > 0) brandMentioned++;
-      totalSources += r.sources.length;
-    });
-
-    const providerAvgs = Object.entries(providerScores).map(([p, scores]) => ({
-      provider: p as Provider,
-      avg: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
-      count: scores.length,
-    })).sort((a, b) => b.avg - a.avg);
-
-    return { avgScore, sentiments, providerAvgs, brandMentioned, totalSources };
-  }, [runs]);
-
-  // Auto-expand first group
-  const isGroupOpen = (prompt: string, idx: number) => {
-    return expandedGroups[prompt] ?? idx === 0;
-  };
-
-  // Build a lookup map of deltas by prompt+provider
+  /* delta lookup */
   const deltaMap = useMemo(() => {
     const m = new Map<string, number>();
     runDeltas.forEach((d) => m.set(`${d.prompt}|||${d.provider}`, d.delta));
     return m;
   }, [runDeltas]);
 
+  /* original index lookup for delete callback */
+  const indexMap = useMemo(() => {
+    const m = new Map<ScrapeRun, number>();
+    runs.forEach((r, i) => m.set(r, i));
+    return m;
+  }, [runs]);
+
+  /* filtered + sorted runs */
+  const visibleRuns = useMemo(() => {
+    let list = runs;
+    if (filterProvider !== "all") list = list.filter((r) => r.provider === filterProvider);
+    if (filterSentiment !== "all") list = list.filter((r) => r.sentiment === filterSentiment);
+    if (query.trim()) {
+      const q = query.toLowerCase();
+      list = list.filter(
+        (r) =>
+          r.prompt.toLowerCase().includes(q) ||
+          (r.answer ?? "").toLowerCase().includes(q),
+      );
+    }
+    const copy = [...list];
+    if (sort === "score") {
+      copy.sort((a, b) => (b.visibilityScore ?? 0) - (a.visibilityScore ?? 0));
+    } else {
+      copy.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    return copy;
+  }, [runs, filterProvider, filterSentiment, query, sort]);
+
+  /* group by prompt for the rail */
+  const promptStats = useMemo(() => {
+    const m = new Map<string, { count: number; avg: number; latest: string }>();
+    runs.forEach((r) => {
+      const cur = m.get(r.prompt) ?? { count: 0, avg: 0, latest: r.createdAt };
+      const newCount = cur.count + 1;
+      const newAvg = (cur.avg * cur.count + (r.visibilityScore ?? 0)) / newCount;
+      const newer = new Date(r.createdAt) > new Date(cur.latest) ? r.createdAt : cur.latest;
+      m.set(r.prompt, { count: newCount, avg: newAvg, latest: newer });
+    });
+    return [...m.entries()]
+      .map(([prompt, s]) => ({ prompt, ...s }))
+      .sort((a, b) => new Date(b.latest).getTime() - new Date(a.latest).getTime());
+  }, [runs]);
+
+  /* hero metrics */
+  const hero = useMemo(() => {
+    if (runs.length === 0) return null;
+    const avg = Math.round(runs.reduce((a, r) => a + (r.visibilityScore ?? 0), 0) / runs.length);
+    const mentioned = runs.filter((r) => (r.brandMentions?.length ?? 0) > 0).length;
+    return {
+      avg,
+      mentioned,
+      coverage: Math.round((mentioned / runs.length) * 100),
+      sources: runs.reduce((a, r) => a + r.sources.length, 0),
+    };
+  }, [runs]);
+
   if (runs.length === 0) {
     return (
-      <div className="rounded-lg border border-th-border bg-th-card-alt p-8 text-center">
-        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-th-accent-soft">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-th-text-accent">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            <path d="M8 9h8M8 13h6" />
-          </svg>
+      <div className="flex h-[60vh] flex-col items-center justify-center gap-3 text-center">
+        <div className="text-6xl font-black tracking-tighter text-th-text-muted">—</div>
+        <div className="text-sm uppercase tracking-[0.2em] text-th-text-muted">
+          No responses captured
         </div>
-        <p className="text-sm font-medium text-th-text">No model responses yet</p>
-        <p className="mt-1 text-sm text-th-text-secondary">Run prompts to see brand analysis across AI models.</p>
+        <div className="max-w-sm text-sm text-th-text-secondary">
+          Run prompts to start streaming AI model responses with brand-aware analysis.
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {/* ── Insight cards ── */}
-      {insights && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-          <InsightMini label="Avg Score" value={`${insights.avgScore}/100`} accent />
-          <InsightMini label="Brand Mentioned" value={`${insights.brandMentioned}/${runs.length}`} />
-          <InsightMini
-            label="Positive"
-            value={insights.sentiments.positive}
-            sub={`${Math.round((insights.sentiments.positive / runs.length) * 100)}%`}
-            color="text-th-success"
+    <div className="space-y-6">
+      {/* ════════ HEADER STRIP ════════════════════════════════ */}
+      {hero && (
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-th-border bg-th-border md:grid-cols-4">
+          <HeroStat label="Avg Visibility" value={`${hero.avg}`} suffix="/100" big />
+          <HeroStat
+            label="Brand Coverage"
+            value={`${hero.coverage}%`}
+            sub={`${hero.mentioned} of ${runs.length}`}
           />
-          <InsightMini
-            label="Negative"
-            value={insights.sentiments.negative}
-            sub={`${Math.round((insights.sentiments.negative / runs.length) * 100)}%`}
-            color="text-th-danger"
-          />
-          <InsightMini label="Sources Cited" value={insights.totalSources} />
-          <InsightMini label="Models Used" value={insights.providerAvgs.length} />
+          <HeroStat label="Responses" value={runs.length.toLocaleString()} />
+          <HeroStat label="Sources Cited" value={hero.sources.toLocaleString()} />
         </div>
       )}
 
-      {/* ── Per-model breakdown ── */}
-      {insights && insights.providerAvgs.length > 1 && (
-        <div className="rounded-xl border border-th-border bg-th-card p-3">
-          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-th-text-muted">
-            Score by Model
+      {/* ════════ COMMAND BAR ════════════════════════════════ */}
+      <div className="sticky top-0 z-10 -mx-1 flex flex-col gap-2 rounded-xl border border-th-border bg-th-card/95 px-3 py-2.5 backdrop-blur">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* search */}
+          <div className="relative flex-1 min-w-[180px]">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-th-text-muted">
+              ⌕
+            </span>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search prompts, answers…"
+              className="w-full rounded-lg border border-th-border bg-th-card-alt py-1.5 pl-8 pr-3 text-xs text-th-text outline-none placeholder:text-th-text-muted focus:border-th-accent focus:ring-2 focus:ring-th-ring"
+            />
           </div>
-          <div className="flex flex-wrap gap-2">
-            {insights.providerAvgs.map(({ provider, avg, count }) => (
-              <div
-                key={provider}
-                className="flex items-center gap-2 rounded-lg border border-th-border bg-th-card-alt px-3 py-1.5"
-              >
-                <ProviderBadge provider={provider} />
-                <span className="text-sm font-semibold text-th-text">{avg}</span>
-                <span className="text-xs text-th-text-muted">/ 100</span>
-                <span className="text-xs text-th-text-muted">({count})</span>
-              </div>
+
+          {/* provider pills */}
+          <div className="flex flex-wrap gap-1">
+            <FilterPill
+              active={filterProvider === "all"}
+              onClick={() => setFilterProvider("all")}
+              label="All"
+            />
+            {ALL_PROVIDERS.map((p) => (
+              <FilterPill
+                key={p}
+                active={filterProvider === p}
+                onClick={() => setFilterProvider(p)}
+                label={PROVIDER_LABELS[p]}
+                dot={PROVIDER_TINT[p]}
+              />
             ))}
           </div>
         </div>
-      )}
 
-      {/* ── Filter / sort toolbar ── */}
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-th-border bg-th-card px-3 py-2.5">
-        <span className="text-xs font-medium text-th-text-muted">Filter:</span>
-
-        {/* Provider filter */}
-        <select
-          value={filterProvider}
-          onChange={(e) => setFilterProvider(e.target.value as Provider | "all")}
-          className="bd-input rounded-lg px-2.5 py-1.5 text-xs"
-        >
-          <option value="all">All Models</option>
-          {ALL_PROVIDERS.map((p) => (
-            <option key={p} value={p}>{PROVIDER_LABELS[p]}</option>
+        <div className="flex flex-wrap items-center gap-2 border-t border-th-border-subtle pt-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-th-text-muted">
+            Sentiment
+          </span>
+          {(["all", "positive", "neutral", "negative", "not-mentioned"] as const).map((s) => (
+            <FilterPill
+              key={s}
+              active={filterSentiment === s}
+              onClick={() => setFilterSentiment(s)}
+              label={s.replace("-", " ")}
+              dot={s !== "all" ? SENTIMENT_TINT[s] : undefined}
+            />
           ))}
-        </select>
+          <div className="ml-auto flex items-center gap-1">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-th-text-muted">
+              Sort
+            </span>
+            <FilterPill
+              active={sort === "date"}
+              onClick={() => setSort("date")}
+              label="Newest"
+            />
+            <FilterPill
+              active={sort === "score"}
+              onClick={() => setSort("score")}
+              label="Top score"
+            />
+          </div>
+        </div>
 
-        {/* Sentiment filter */}
-        <select
-          value={filterSentiment}
-          onChange={(e) => setFilterSentiment(e.target.value)}
-          className="bd-input rounded-lg px-2.5 py-1.5 text-xs"
-        >
-          <option value="all">All Sentiment</option>
-          <option value="positive">Positive</option>
-          <option value="neutral">Neutral</option>
-          <option value="negative">Negative</option>
-          <option value="not-mentioned">Not Mentioned</option>
-        </select>
-
-        {/* Sort */}
-        <select
-          value={sortField}
-          onChange={(e) => setSortField(e.target.value as "date" | "score")}
-          className="bd-input rounded-lg px-2.5 py-1.5 text-xs"
-        >
-          <option value="date">Sort: Recent</option>
-          <option value="score">Sort: Score</option>
-        </select>
-
-        <span className="ml-auto text-xs text-th-text-muted">
-          <span className="font-semibold text-th-text">{filteredRuns.length}</span> responses across{" "}
-          <span className="font-semibold text-th-text">{promptGroups.length}</span> prompt{promptGroups.length > 1 ? "s" : ""}
-        </span>
+        <div className="text-[11px] tabular-nums text-th-text-muted">
+          Streaming <span className="font-bold text-th-text">{visibleRuns.length}</span> of{" "}
+          {runs.length} responses across {promptStats.length} prompts
+        </div>
       </div>
 
-      {/* ── Prompt groups ── */}
-      <div className="space-y-2">
-        {promptGroups.map(({ prompt, runs: groupRuns }, groupIdx) => {
-          const open = isGroupOpen(prompt, groupIdx);
-          const avgScore = Math.round(
-            groupRuns.reduce((a, r) => a + (r.visibilityScore ?? 0), 0) / groupRuns.length,
-          );
-          const providers = [...new Set(groupRuns.map((r) => r.provider))];
-          const scoreColor =
-            avgScore >= 60 ? "text-th-success" : avgScore >= 30 ? "text-th-text-accent" : "text-th-danger";
+      {/* ════════ FEED ════════════════════════════════════════ */}
+      <div className="overflow-hidden rounded-xl border border-th-border bg-th-card">
+        {visibleRuns.length === 0 ? (
+          <div className="p-8 text-center text-sm text-th-text-muted">
+            No responses match these filters.
+          </div>
+        ) : (
+          <ul className="divide-y divide-th-border-subtle">
+            {visibleRuns.map((run) => {
+              const key = `${run.createdAt}|${run.provider}|${indexMap.get(run)}`;
+              const isOpen = expanded.has(key);
+              const tint = PROVIDER_TINT[run.provider];
+              const delta = deltaMap.get(`${run.prompt}|||${run.provider}`);
+              const text = normalize(run.answer ?? "");
+              const isGarbage =
+                !text ||
+                text.toLowerCase().trim() === run.prompt.toLowerCase().trim() ||
+                /^https?:\/\/\S+$/i.test(text.trim());
+              const display = isGarbage ? "" : text;
+              const preview = display.length > 220 ? display.slice(0, 220) + "…" : display;
+              const uniqueSources = [...new Set(run.sources)];
 
-          // Compute group-level average delta
-          const groupDeltas = groupRuns
-            .map((r) => deltaMap.get(`${r.prompt}|||${r.provider}`))
-            .filter((d): d is number => d != null);
-          const avgDelta = groupDeltas.length > 0
-            ? Math.round(groupDeltas.reduce((a, b) => a + b, 0) / groupDeltas.length)
-            : null;
-
-          return (
-            <div key={prompt} className="rounded-xl border border-th-border bg-th-card-alt">
-              {/* Prompt header */}
-              <button
-                onClick={() =>
-                  setExpandedGroups((prev) => ({ ...prev, [prompt]: !open }))
-                }
-                className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-th-card-hover transition-colors rounded-t-xl"
-              >
-                <span className="mt-0.5 text-xs text-th-text-muted">{open ? "▼" : "▶"}</span>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium leading-snug text-th-text">
-                    {prompt.length > 120 ? prompt.slice(0, 117) + "…" : prompt}
-                  </div>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                    {providers.map((p) => (
-                      <ProviderBadge key={p} provider={p} />
-                    ))}
-                    <span className="text-xs text-th-text-muted">
-                      {groupRuns.length} response{groupRuns.length > 1 ? "s" : ""}
-                    </span>
-                    <span className="text-xs text-th-text-muted">·</span>
-                    <span className={`text-xs font-semibold ${scoreColor}`}>
-                      Avg: {avgScore}/100
-                    </span>
-                    {avgDelta != null && avgDelta !== 0 && (
-                      <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-bold ${
-                        avgDelta > 0 ? "bg-th-success-soft text-th-success" : "bg-th-danger-soft text-th-danger"
-                      }`}>
-                        {avgDelta > 0 ? "↑" : "↓"}{Math.abs(avgDelta)}
+              return (
+                <li
+                  key={key}
+                  className="group relative transition-colors hover:bg-th-card-hover"
+                >
+                  {/* left accent strip */}
+                  <span
+                    aria-hidden
+                    className="absolute inset-y-0 left-0 w-[3px]"
+                    style={{ backgroundColor: tint }}
+                  />
+                  <button
+                    onClick={() =>
+                      setExpanded((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(key)) next.delete(key);
+                        else next.add(key);
+                        return next;
+                      })
+                    }
+                    className="flex w-full items-start gap-4 px-5 py-4 text-left"
+                  >
+                    {/* score column */}
+                    <div className="flex w-14 shrink-0 flex-col items-start">
+                      <span className="text-2xl font-bold tabular-nums leading-none text-th-text">
+                        {run.visibilityScore ?? 0}
                       </span>
-                    )}
-                  </div>
-                </div>
-              </button>
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-th-text-muted">
+                        /100
+                      </span>
+                      {delta != null && delta !== 0 && (
+                        <span
+                          className="mt-1 text-[11px] font-bold tabular-nums"
+                          style={{
+                            color: delta > 0 ? "var(--th-success)" : "var(--th-danger)",
+                          }}
+                        >
+                          {delta > 0 ? "▲" : "▼"} {Math.abs(delta)}
+                        </span>
+                      )}
+                    </div>
 
-              {/* Model cards */}
-              {open && (
-                <div className="space-y-2 border-t border-th-border p-3">
-                  {groupRuns.map((run, i) => (
-                    <ModelResponseCard
-                      key={`${run.provider}-${run.createdAt}-${i}`}
-                      run={run}
-                      brandTerms={brandTerms}
-                      competitorTerms={competitorTerms}
-                      delta={deltaMap.get(`${run.prompt}|||${run.provider}`) ?? null}
-                      onDelete={onDeleteRun ? () => {
-                        const origIdx = runs.indexOf(run);
-                        if (origIdx !== -1) onDeleteRun(origIdx);
-                      } : undefined}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
+                    {/* main content */}
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <span
+                          className="rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                          style={{ backgroundColor: tint + "22", color: tint }}
+                        >
+                          {PROVIDER_LABELS[run.provider]}
+                        </span>
+                        <span
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider"
+                          style={{ color: SENTIMENT_TINT[run.sentiment ?? "neutral"] }}
+                        >
+                          <span
+                            className="h-1.5 w-1.5 rounded-full"
+                            style={{ backgroundColor: SENTIMENT_TINT[run.sentiment ?? "neutral"] }}
+                          />
+                          {(run.sentiment ?? "neutral").replace("-", " ")}
+                        </span>
+                        {(run.brandMentions?.length ?? 0) > 0 && (
+                          <span className="text-[10px] font-medium uppercase tracking-wider text-th-brand-text">
+                            {run.brandMentions.length}× brand
+                          </span>
+                        )}
+                        {(run.competitorMentions?.length ?? 0) > 0 && (
+                          <span className="text-[10px] font-medium uppercase tracking-wider text-th-competitor-text">
+                            {run.competitorMentions.length}× comp
+                          </span>
+                        )}
+                        {uniqueSources.length > 0 && (
+                          <span className="text-[10px] uppercase tracking-wider text-th-text-muted">
+                            {uniqueSources.length} src
+                          </span>
+                        )}
+                        <span className="ml-auto text-[10px] tabular-nums text-th-text-muted">
+                          {relTime(run.createdAt)}
+                        </span>
+                      </div>
+
+                      <div className="mb-1.5 line-clamp-1 text-sm font-semibold text-th-text">
+                        {run.prompt}
+                      </div>
+
+                      {!isOpen && preview && (
+                        <p className="line-clamp-2 text-[13px] leading-snug text-th-text-secondary">
+                          <Highlight text={preview} brand={brandTerms} competitor={competitorTerms} />
+                        </p>
+                      )}
+                    </div>
+                  </button>
+
+                  {/* expanded body */}
+                  {isOpen && (
+                    <div className="border-t border-th-border-subtle bg-th-card-alt px-5 py-4 pl-[88px]">
+                      {display ? (
+                        <div className="max-h-[440px] overflow-auto whitespace-pre-wrap break-words pr-2 text-[13.5px] leading-7 text-th-text">
+                          <Highlight text={display} brand={brandTerms} competitor={competitorTerms} />
+                        </div>
+                      ) : (
+                        <div className="italic text-sm text-th-text-muted">
+                          No response text captured. Re-run the prompt to fetch fresh data.
+                        </div>
+                      )}
+
+                      {uniqueSources.length > 0 && (
+                        <div className="mt-4">
+                          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-th-text-muted">
+                            Cited sources · {uniqueSources.length}
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {uniqueSources.map((s) => {
+                              let host = s;
+                              try {
+                                host = new URL(s).host.replace(/^www\./, "");
+                              } catch {
+                                /* keep raw */
+                              }
+                              return (
+                                <a
+                                  key={s}
+                                  href={s}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title={s}
+                                  className="inline-flex max-w-[260px] items-center gap-1 truncate rounded-md border border-th-border bg-th-card px-2 py-1 text-xs text-th-text-secondary transition-colors hover:border-th-accent hover:text-th-text-accent"
+                                >
+                                  <span className="text-th-text-muted">↗</span>
+                                  <span className="truncate">{host}</span>
+                                </a>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {onDeleteRun && (
+                        <div className="mt-4 flex justify-end">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const idx = indexMap.get(run);
+                              if (idx == null) return;
+                              if (window.confirm("Delete this response? This cannot be undone.")) {
+                                onDeleteRun(idx);
+                              }
+                            }}
+                            className="rounded-md border border-th-border bg-th-card px-2.5 py-1 text-[11px] font-medium text-th-text-muted transition-colors hover:border-th-danger hover:text-th-danger"
+                          >
+                            Delete response
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </div>
   );
 }
 
-/* ── Insight Mini Card ── */
-function InsightMini({
+/* ───────────────────────── sub-components ─────────────────── */
+
+function HeroStat({
   label,
   value,
+  suffix,
   sub,
-  accent,
-  color,
+  big,
 }: {
   label: string;
-  value: string | number;
+  value: string;
+  suffix?: string;
   sub?: string;
-  accent?: boolean;
-  color?: string;
+  big?: boolean;
 }) {
   return (
-    <div className={`rounded-lg border px-3 py-2 ${accent ? "border-th-accent/30 bg-th-accent-soft" : "border-th-border bg-th-card"}`}>
-      <div className="text-xs uppercase tracking-wider text-th-text-muted">{label}</div>
-      <div className={`mt-0.5 text-lg font-bold ${color ?? "text-th-text"}`}>
-        {value}
-        {sub && <span className="ml-1 text-xs font-normal text-th-text-muted">{sub}</span>}
+    <div className="flex flex-col gap-1 bg-th-card p-4">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-th-text-muted">
+        {label}
       </div>
+      <div className="flex items-baseline gap-1">
+        <span
+          className={`font-bold tabular-nums leading-none text-th-text ${
+            big ? "text-4xl" : "text-2xl"
+          }`}
+        >
+          {value}
+        </span>
+        {suffix && (
+          <span className="text-sm font-medium text-th-text-muted">{suffix}</span>
+        )}
+      </div>
+      {sub && <div className="text-[11px] text-th-text-muted">{sub}</div>}
     </div>
+  );
+}
+
+function FilterPill({
+  active,
+  onClick,
+  label,
+  dot,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  dot?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium capitalize transition-colors ${
+        active
+          ? "border-th-accent bg-th-accent text-th-text-inverse"
+          : "border-th-border bg-th-card-alt text-th-text-secondary hover:border-th-accent/40 hover:text-th-text"
+      }`}
+    >
+      {dot && (
+        <span
+          className="h-1.5 w-1.5 rounded-full"
+          style={{ backgroundColor: active ? "currentColor" : dot }}
+        />
+      )}
+      {label}
+    </button>
   );
 }
