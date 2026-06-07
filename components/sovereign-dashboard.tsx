@@ -1738,74 +1738,120 @@ Now analyze all ${competitorList.length} competitors:`,
 
         {/* Scrollable body */}
         <main className="flex-1 overflow-y-auto bg-th-bg px-3 py-3 md:px-5 md:py-4">
-          {/* KPI strip */}
-          <section className="mb-4 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-6">
-            <KpiCard label="Total Runs" value={state.runs.length} />
-            <KpiCard
-              label="Avg Visibility"
-              value={
-                state.runs.length > 0
-                  ? `${Math.round(state.runs.reduce((a, r) => a + (r.visibilityScore ?? 0), 0) / state.runs.length)}%`
-                  : "—"
-              }
-              delta={kpiVisibilityDelta}
-              small
-              onInfoClick={() => setShowScoreInfo(!showScoreInfo)}
-            />
-            <KpiCard
-              label="Brand Mentioned"
-              value={state.runs.filter((r) => (r.brandMentions?.length ?? 0) > 0).length}
-            />
-            <KpiCard label="Captured Sources" value={totalSources} />
-            <KpiCard label="Citation Opps" value={citationOpportunities} />
-            <KpiCard
-              label="Latest Run"
-              value={
-                latestRun
-                  ? latestRun.createdAt.replace("T", " ").slice(0, 16)
-                  : "—"
-              }
-              small
-            />
-          </section>
-
-          {/* ── Movers strip ── */}
-          {movers.length > 0 && (
-            <section className="mb-4 rounded-xl border border-th-border bg-th-card p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <span className="text-base">📊</span>
-                <h3 className="text-sm font-semibold text-th-text">Top Movers</h3>
-                <span className="text-xs text-th-text-muted">Biggest visibility changes between runs</span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {movers.map((m, i) => {
-                  const up = m.delta > 0;
-                  return (
-                    <div
-                      key={`${m.prompt.slice(0, 20)}-${m.provider}-${i}`}
-                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${
-                        up
-                          ? "border-th-success/30 bg-th-success-soft"
-                          : "border-th-danger/30 bg-th-danger-soft"
-                      }`}
-                    >
-                      <span className={`text-lg font-bold ${up ? "text-th-success" : "text-th-danger"}`}>
-                        {up ? "↑" : "↓"}{Math.abs(m.delta)}
-                      </span>
-                      <div className="min-w-0">
-                        <div className="truncate text-xs font-medium text-th-text" style={{ maxWidth: "180px" }}>
-                          {m.prompt.length > 50 ? m.prompt.slice(0, 47) + "…" : m.prompt}
-                        </div>
-                        <div className="text-xs text-th-text-muted">
-                          {PROVIDER_LABELS[m.provider]} · {m.previousScore}→{m.currentScore}
-                        </div>
+          {/* ── Intelligence Command Bar ── */}
+          {(() => {
+            const avg = state.runs.length > 0
+              ? Math.round(state.runs.reduce((a, r) => a + (r.visibilityScore ?? 0), 0) / state.runs.length)
+              : 0;
+            const mentioned = state.runs.filter((r) => (r.brandMentions?.length ?? 0) > 0).length;
+            const mentionRate = state.runs.length > 0 ? Math.round((mentioned / state.runs.length) * 100) : 0;
+            const delta = kpiVisibilityDelta ?? 0;
+            const deltaUp = delta > 0;
+            const deltaColor = delta === 0 ? "text-th-text-muted" : deltaUp ? "text-th-success" : "text-th-danger";
+            return (
+              <section className="mb-4 overflow-hidden rounded-2xl border border-th-border bg-gradient-to-br from-th-card via-th-card to-th-card-alt shadow-sm">
+                {/* Hero row */}
+                <div className="grid grid-cols-1 divide-th-border md:grid-cols-[1.4fr_1fr_1fr_1fr] md:divide-x">
+                  {/* Mega visibility */}
+                  <div className="relative px-6 py-5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-th-text-muted">
+                        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-th-success" />
+                        Brand Visibility Index
+                      </div>
+                      <button onClick={() => setShowScoreInfo(!showScoreInfo)} className="text-[10px] text-th-text-muted hover:text-th-text-accent" title="Scoring method">METHOD ⓘ</button>
+                    </div>
+                    <div className="mt-2 flex items-baseline gap-3">
+                      <div className="font-mono text-7xl font-bold leading-none tracking-tighter text-th-text tabular-nums">
+                        {avg}
+                      </div>
+                      <div className="text-2xl font-light text-th-text-muted">/100</div>
+                      <div className={`ml-auto flex items-center gap-1 text-sm font-bold tabular-nums ${deltaColor}`}>
+                        {delta !== 0 && <span>{deltaUp ? "▲" : "▼"}</span>}
+                        {delta === 0 ? "FLAT" : `${Math.abs(delta)}`}
+                        <span className="text-[10px] font-medium text-th-text-muted ml-1">vs prior</span>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </section>
-          )}
+                    {/* Bar */}
+                    <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-th-border">
+                      <div
+                        className="h-full bg-gradient-to-r from-th-accent to-th-success transition-all"
+                        style={{ width: `${avg}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Mention rate */}
+                  <div className="px-5 py-5">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-th-text-muted">Mention Rate</div>
+                    <div className="mt-2 flex items-baseline gap-1">
+                      <div className="font-mono text-4xl font-bold tabular-nums text-th-text">{mentionRate}</div>
+                      <div className="text-base text-th-text-muted">%</div>
+                    </div>
+                    <div className="mt-1 text-xs text-th-text-muted tabular-nums">
+                      {mentioned} <span className="opacity-60">/ {state.runs.length} runs</span>
+                    </div>
+                  </div>
+
+                  {/* Sources */}
+                  <div className="px-5 py-5">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-th-text-muted">Citations Captured</div>
+                    <div className="mt-2 font-mono text-4xl font-bold tabular-nums text-th-text">{totalSources}</div>
+                    <div className="mt-1 text-xs text-th-text-muted">
+                      <span className="font-semibold text-th-accent">{citationOpportunities}</span> opportunities
+                    </div>
+                  </div>
+
+                  {/* Latest pulse */}
+                  <div className="px-5 py-5">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-th-text-muted">Last Pulse</div>
+                    <div className="mt-2 font-mono text-xl font-semibold tabular-nums text-th-text">
+                      {latestRun ? latestRun.createdAt.replace("T", " ").slice(11, 16) : "—"}
+                    </div>
+                    <div className="mt-1 text-xs text-th-text-muted tabular-nums">
+                      {latestRun ? latestRun.createdAt.slice(0, 10) : "no runs yet"}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Movers ticker */}
+                {movers.length > 0 && (
+                  <div className="flex items-stretch border-t border-th-border bg-th-card-alt/40">
+                    <div className="flex shrink-0 items-center gap-2 border-r border-th-border px-4 py-2.5">
+                      <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-th-accent" />
+                      <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-th-text-muted">Drift Watch</span>
+                    </div>
+                    <div className="flex flex-1 items-center gap-0 overflow-x-auto">
+                      {movers.map((m, i) => {
+                        const up = m.delta > 0;
+                        return (
+                          <div
+                            key={`${m.prompt.slice(0, 20)}-${m.provider}-${i}`}
+                            className="group flex shrink-0 items-center gap-3 border-r border-th-border/60 px-4 py-2.5 transition-colors hover:bg-th-card"
+                          >
+                            <div className={`font-mono text-base font-bold tabular-nums ${up ? "text-th-success" : "text-th-danger"}`}>
+                              {up ? "+" : "−"}{Math.abs(m.delta)}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="truncate text-xs font-medium text-th-text" style={{ maxWidth: "220px" }}>
+                                {m.prompt.length > 60 ? m.prompt.slice(0, 57) + "…" : m.prompt}
+                              </div>
+                              <div className="font-mono text-[10px] uppercase tracking-wider text-th-text-muted tabular-nums">
+                                {PROVIDER_LABELS[m.provider]} · {m.previousScore}→{m.currentScore}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="hidden shrink-0 items-center px-4 text-[10px] font-mono uppercase tracking-wider text-th-text-muted md:flex">
+                      {state.runs.length} runs tracked
+                    </div>
+                  </div>
+                )}
+              </section>
+            );
+          })()}
 
           {/* Scoring explanation */}
           {showScoreInfo && (
